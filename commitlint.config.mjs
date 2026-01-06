@@ -7,6 +7,7 @@ export default {
       [
         'feat',     // New feature
         'fix',      // Bug fix
+        'security', // Security fix or improvement
         'docs',     // Documentation
         'style',    // Formatting, missing semicolons, etc.
         'refactor', // Code refactoring

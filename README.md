@@ -134,11 +134,34 @@ main (development)
 
 ### Backporting
 
-To backport a fix to a release branch:
+This project follows trunk-based development best practices: **fixes are committed to `main` first**, then cherry-picked to release branches.
+
+#### Automatic Label Suggestions
+
+When a PR contains `fix:` or `security:` commits, backport labels are **automatically suggested**:
+
+| PR Target     | Auto-Suggested Labels                                    |
+| ------------- | -------------------------------------------------------- |
+| `main`        | `backport release/X.Y` for the 2 latest release branches |
+| `release/X.Y` | `backport main` + other active release branches          |
+
+**Workflow:**
+
+1. Open a PR with `fix:` or `security:` commits
+2. Labels like `backport release/1.2` are automatically added
+3. **Review the suggestions** - remove labels for branches that shouldn't receive the fix
+4. Merge the PR
+5. Cherry-pick PRs are automatically created for remaining labels
+
+#### Manual Backporting
+
+To manually backport any PR:
 
 1. Merge the fix to `main` first
 2. Add label `backport release/1.x` to the merged PR
 3. A cherry-pick PR is automatically created
+
+> **Note**: If cherry-pick fails due to conflicts, an issue is created for manual resolution.
 
 ## Commit Conventions
 
@@ -154,17 +177,18 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 
 ### Types
 
-| Type       | Description   | Version Bump |
-| ---------- | ------------- | ------------ |
-| `feat`     | New feature   | Minor        |
-| `fix`      | Bug fix       | Patch        |
-| `docs`     | Documentation | Patch        |
-| `perf`     | Performance   | Patch        |
-| `refactor` | Refactoring   | Patch        |
-| `test`     | Tests         | None         |
-| `ci`       | CI/CD         | None         |
-| `build`    | Build system  | None         |
-| `chore`    | Maintenance   | None         |
+| Type       | Description   | Version Bump | Auto-Backport |
+| ---------- | ------------- | ------------ | ------------- |
+| `feat`     | New feature   | Minor        | No            |
+| `fix`      | Bug fix       | Patch        | **Yes**       |
+| `security` | Security fix  | Patch        | **Yes**       |
+| `docs`     | Documentation | Patch        | No            |
+| `perf`     | Performance   | Patch        | No            |
+| `refactor` | Refactoring   | Patch        | No            |
+| `test`     | Tests         | None         | No            |
+| `ci`       | CI/CD         | None         | No            |
+| `build`    | Build system  | None         | No            |
+| `chore`    | Maintenance   | None         | No            |
 
 ### Scopes
 
@@ -181,6 +205,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 ```bash
 feat(api): add user authentication endpoint
 fix(app): resolve null reference in health check
+security(api): sanitize user input to prevent XSS
 docs: update README with Docker instructions
 refactor(tests): simplify integration test setup
 ci(deps): bump actions/checkout to v4
@@ -188,15 +213,16 @@ ci(deps): bump actions/checkout to v4
 
 ## CI/CD Workflows
 
-| Workflow             | Trigger                    | Purpose                                |
-| -------------------- | -------------------------- | -------------------------------------- |
-| `ci.yml`             | PR to main/develop         | Build, test, lint, MSI preview         |
-| `release.yml`        | Push to main/release/\*\*  | Release Please + dotnet-releaser + MSI |
-| `backport.yml`       | Merged PR with label       | Cherry-pick to release branches        |
-| `cleanup.yml`        | Weekly schedule            | Delete old artifacts and workflow runs |
-| `lint-workflows.yml` | Push/PR changing workflows | actionlint + zizmor security scanning  |
-| `commitlint.yml`     | PR to main/develop         | Validate conventional commit messages  |
-| `sonar.yml`          | Push/PR with code changes  | SonarCloud code quality analysis       |
+| Workflow                | Trigger                    | Purpose                                          |
+| ----------------------- | -------------------------- | ------------------------------------------------ |
+| `ci.yml`                | PR to main/develop         | Build, test, lint, MSI preview                   |
+| `release.yml`           | Push to main/release/\*\*  | Release Please + dotnet-releaser + MSI           |
+| `suggest-backports.yml` | PR opened/ready_for_review | Suggest backport labels for fix/security commits |
+| `backport.yml`          | Merged PR with label       | Cherry-pick to release branches                  |
+| `cleanup.yml`           | Weekly schedule            | Delete old artifacts and workflow runs           |
+| `lint-workflows.yml`    | Push/PR changing workflows | actionlint + zizmor security scanning            |
+| `commitlint.yml`        | PR to main/develop         | Validate conventional commit messages            |
+| `sonar.yml`             | Push/PR with code changes  | SonarQube code quality analysis                  |
 
 ## Preview MSI Installers
 
@@ -253,9 +279,10 @@ zizmor .github/workflows/
 
 Some security findings are intentionally suppressed with documented justifications:
 
-| Rule                 | Workflow     | Justification                                                                                                                   |
-| -------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `dangerous-triggers` | backport.yml | `pull_request_target` required for backport action write permissions. Mitigated by fork check and `persist-credentials: false`. |
+| Rule                 | Workflow              | Justification                                                                                                                   |
+| -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `dangerous-triggers` | backport.yml          | `pull_request_target` required for backport action write permissions. Mitigated by fork check and `persist-credentials: false`. |
+| `dangerous-triggers` | suggest-backports.yml | `pull_request_target` required for adding labels/comments. Mitigated by fork check and no PR code execution.                    |
 
 Suppressions use inline comments: `# zizmor: ignore[rule-name]`
 
@@ -429,13 +456,14 @@ act --secret-file .secrets
 
 **act** cannot fully simulate all GitHub Actions features:
 
-| Workflow     | act Support | Notes                              |
-| ------------ | ----------- | ---------------------------------- |
-| ci.yml       | Partial     | Windows runner simulated on Linux  |
-| sonar.yml    | Partial     | Requires SONAR_TOKEN               |
-| release.yml  | Limited     | release-please integration complex |
-| backport.yml | Limited     | Requires merged PR event           |
-| cleanup.yml  | Limited     | Requires GitHub API access         |
+| Workflow              | act Support | Notes                              |
+| --------------------- | ----------- | ---------------------------------- |
+| ci.yml                | Partial     | Windows runner simulated on Linux  |
+| sonar.yml             | Partial     | Requires SONAR_TOKEN               |
+| release.yml           | Limited     | release-please integration complex |
+| suggest-backports.yml | Limited     | Requires PR event with commits     |
+| backport.yml          | Limited     | Requires merged PR event           |
+| cleanup.yml           | Limited     | Requires GitHub API access         |
 
 **Recommendation**: Use `actionlint` for syntax validation (catches most issues), and test complex workflows via short-lived branches.
 

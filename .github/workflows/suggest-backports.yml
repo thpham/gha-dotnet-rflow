@@ -1,0 +1,171 @@
+name: Suggest Backport Labels
+
+# Justification for pull_request_target: Required to have write permissions
+# to add labels and comments to PRs. Risk is mitigated by:
+# 1. Only running on PRs from the same repository (not forks)
+# 2. Using persist-credentials: false on checkout
+# 3. The workflow only uses GitHub API to add labels/comments, doesn't execute PR code
+on: # zizmor: ignore[dangerous-triggers]
+  pull_request_target:
+    types: [opened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  suggest-labels:
+    name: Suggest Backport Labels
+    runs-on: ubuntu-latest
+    # Skip draft PRs and PRs from forks
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout
+        # v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check Commits and Suggest Labels
+        # v7
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          script: |
+            const baseBranch = context.payload.pull_request.base.ref;
+            const prNumber = context.payload.pull_request.number;
+            const headSha = context.payload.pull_request.head.sha;
+            const baseSha = context.payload.pull_request.base.sha;
+
+            console.log(`PR #${prNumber}: ${baseBranch} <- ${context.payload.pull_request.head.ref}`);
+
+            // Get commits in this PR
+            const { data: commits } = await github.rest.pulls.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            // Check if any commit is a fix: or security: type
+            const backportableTypes = /^(fix|security)(\(.+\))?:/;
+            const hasBackportableCommit = commits.some(commit => {
+              const message = commit.commit.message.split('\n')[0];
+              const isBackportable = backportableTypes.test(message);
+              if (isBackportable) {
+                console.log(`Found backportable commit: ${message}`);
+              }
+              return isBackportable;
+            });
+
+            if (!hasBackportableCommit) {
+              console.log('No fix: or security: commits found, skipping label suggestion');
+              return;
+            }
+
+            // Fetch all branches
+            const { data: branches } = await github.rest.repos.listBranches({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+
+            // Filter and sort release branches by semantic version (latest first)
+            const releaseBranches = branches
+              .map(b => b.name)
+              .filter(name => /^release\/\d+\.\d+$/.test(name))
+              .sort((a, b) => {
+                const [, aMajor, aMinor] = a.match(/release\/(\d+)\.(\d+)/);
+                const [, bMajor, bMinor] = b.match(/release\/(\d+)\.(\d+)/);
+                return (Number(bMajor) - Number(aMajor)) || (Number(bMinor) - Number(aMinor));
+              })
+              .slice(0, 2); // Take 2 latest
+
+            console.log(`Latest release branches: ${releaseBranches.join(', ') || '(none)'}`);
+            console.log(`PR base branch: ${baseBranch}`);
+
+            // Determine which labels to suggest
+            let labelsToAdd = [];
+
+            const isMainBranch = baseBranch === 'main' || baseBranch === 'master';
+            const trunkBranch = branches.some(b => b.name === 'main') ? 'main' : 'master';
+
+            if (isMainBranch) {
+              // PR to main/master: suggest backport to release branches
+              labelsToAdd = releaseBranches.map(b => `backport ${b}`);
+            } else if (baseBranch.startsWith('release/')) {
+              // PR to release branch: suggest backport to trunk + other release branches
+              labelsToAdd = [`backport ${trunkBranch}`];
+              for (const branch of releaseBranches) {
+                if (branch !== baseBranch) {
+                  labelsToAdd.push(`backport ${branch}`);
+                }
+              }
+            }
+
+            if (labelsToAdd.length === 0) {
+              console.log('No backport labels to suggest (no release branches found)');
+              return;
+            }
+
+            console.log(`Suggesting labels: ${labelsToAdd.join(', ')}`);
+
+            // Ensure labels exist (create if missing)
+            for (const label of labelsToAdd) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label
+                });
+              } catch (e) {
+                if (e.status === 404) {
+                  console.log(`Creating label: ${label}`);
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: label,
+                    color: '5319e7',
+                    description: `Backport to ${label.replace('backport ', '')}`
+                  });
+                }
+              }
+            }
+
+            // Add labels to PR
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: labelsToAdd
+            });
+
+            // Add comment explaining the labels
+            const commitTypes = commits
+              .map(c => c.commit.message.split('\n')[0])
+              .filter(m => backportableTypes.test(m))
+              .map(m => `\`${m.substring(0, 60)}${m.length > 60 ? '...' : ''}\``)
+              .join('\n- ');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: [
+                '### 🍒 Backport Labels Suggested',
+                '',
+                'This PR contains `fix:` or `security:` commits that may need backporting:',
+                `- ${commitTypes}`,
+                '',
+                '**Suggested backport targets:**',
+                labelsToAdd.map(l => `- \`${l}\``).join('\n'),
+                '',
+                '> **To skip a backport**, remove the label before merging.',
+                '>',
+                '> After merge, cherry-pick PRs will be created automatically for remaining labels.'
+              ].join('\n')
+            });
+
+            console.log('Labels and comment added successfully');
