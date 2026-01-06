@@ -10,9 +10,9 @@
 
   <ItemGroup>
     <!-- Test framework -->
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageReference Include="xunit" Version="2.*" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.*">
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -24,7 +24,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.*" />
 
     <!-- Assertions -->
-    <PackageReference Include="FluentAssertions" Version="6.*" />
+    <PackageReference Include="FluentAssertions" Version="8.8.0" />
 
     <!-- Code coverage -->
     <PackageReference Include="coverlet.collector" Version="6.*">
