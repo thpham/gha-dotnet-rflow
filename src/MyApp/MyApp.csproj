@@ -15,7 +15,7 @@
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.*" />
 
     <!-- OpenAPI / Swagger -->
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
 
     <!-- Health checks -->
     <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.*" />
