@@ -11,7 +11,10 @@ namespace MyApp.Tests.Integration;
 
 /// <summary>
 /// Integration tests for the API endpoints
+/// These tests require a proper test host configuration and are excluded from CI
+/// due to Windows Authentication (Negotiate) not being supported in WebApplicationFactory.
 /// </summary>
+[Trait("Category", "Integration")]
 public class ApiIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly WebApplicationFactory<Program> _factory;

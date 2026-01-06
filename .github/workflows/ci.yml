@@ -72,6 +72,7 @@ jobs:
             --configuration ${{ env.BUILD_CONFIGURATION }} `
             --no-build `
             --verbosity normal `
+            --filter "Category!=Integration" `
             --logger "trx;LogFileName=test-results.trx" `
             --collect:"XPlat Code Coverage" `
             --results-directory ./TestResults
