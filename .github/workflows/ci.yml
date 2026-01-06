@@ -6,16 +6,28 @@ on:
       - main
       - develop
       - "release/**"
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".github/CODEOWNERS"
+    paths:
+      - "**/*.cs"
+      - "**/*.csproj"
+      - "**/*.sln"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "installer/**"
+      - "tests/Scripts/**"
   pull_request:
     branches:
       - main
       - develop
       - "release/**"
     types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "**/*.cs"
+      - "**/*.csproj"
+      - "**/*.sln"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "installer/**"
+      - "tests/Scripts/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
