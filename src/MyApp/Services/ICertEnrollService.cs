@@ -27,13 +27,43 @@ public interface ICertEnrollService
     string CreateSelfSignedCertificate(string subjectName, int validityDays);
 }
 
+/// <summary>
+/// Options for creating a certificate enrollment request.
+/// </summary>
 public class CertEnrollRequestOptions
 {
+    /// <summary>
+    /// The X.500 distinguished name for the certificate subject (e.g., "CN=example.com").
+    /// </summary>
     public string SubjectName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The certificate template name to use (requires AD CS infrastructure).
+    /// </summary>
     public string? TemplateName { get; set; }
+
+    /// <summary>
+    /// The RSA key length in bits. Default is 2048.
+    /// </summary>
     public int KeyLength { get; set; } = 2048;
+
+    /// <summary>
+    /// The key usage extension value. Default is "DigitalSignature".
+    /// </summary>
     public string KeyUsage { get; set; } = "DigitalSignature";
-    public bool Exportable { get; set; } = false;
+
+    /// <summary>
+    /// Whether the private key should be exportable. Default is false.
+    /// </summary>
+    public bool Exportable { get; set; }
+
+    /// <summary>
+    /// A friendly name for the certificate in the certificate store.
+    /// </summary>
     public string? FriendlyName { get; set; }
+
+    /// <summary>
+    /// Subject Alternative Names (SANs) to include in the certificate.
+    /// </summary>
     public string[]? SubjectAlternativeNames { get; set; }
 }
