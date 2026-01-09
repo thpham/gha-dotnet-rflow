@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- Version is managed by Release Please -->
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     <InformationalVersion>$(Version)+$(SourceRevisionId)</InformationalVersion>
