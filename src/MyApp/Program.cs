@@ -98,16 +98,20 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseHttpsRedirection();
+// Skip HTTPS redirection in CI environment (plain HTTP for testing)
+if (!app.Environment.IsEnvironment("CI"))
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Health check endpoint
+// Health check endpoint (anonymous access for monitoring)
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
+}).AllowAnonymous();
 
 app.MapControllers();
 

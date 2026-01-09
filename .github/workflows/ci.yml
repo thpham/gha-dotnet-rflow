@@ -98,14 +98,15 @@ jobs:
           path: ./TestResults
           retention-days: 7
 
-      - name: Upload Coverage to Codecov
-        # v5
-        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de
-        if: success()
-        with:
-          files: ./TestResults/**/coverage.cobertura.xml
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # - name: Upload Coverage to Codecov
+      #   # v5 - Disabled by default. To enable:
+      #   # 1. Add CODECOV_TOKEN secret to repository settings
+      #   # 2. Change 'if: false' to 'if: success()'
+      #   uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de
+      #   with:
+      #     files: ./TestResults/**/coverage.cobertura.xml
+      #     fail_ci_if_error: false
+      #     token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Save NuGet cache
         # v4 - Only save cache on push events (not PRs) to prevent cache poisoning
@@ -167,7 +168,7 @@ jobs:
     name: Pester Integration Tests
     runs-on: windows-latest
     needs: build-and-test
-    continue-on-error: true  # Allow workflow to continue even if integration tests fail
+    continue-on-error: true # Allow workflow to continue even if integration tests fail
     permissions:
       contents: read
 
@@ -196,9 +197,10 @@ jobs:
       - name: Start Application
         shell: pwsh
         run: |
-          # Start the application in background
-          $env:ASPNETCORE_URLS = "https://localhost:5001"
-          $env:ASPNETCORE_ENVIRONMENT = "Development"
+          # Start the application in background using plain HTTP for CI simplicity
+          # Avoids certificate trust issues and HTTPS redirect complications
+          $env:ASPNETCORE_URLS = "http://localhost:5000"
+          $env:ASPNETCORE_ENVIRONMENT = "CI"
           Start-Process -FilePath "./publish/MyApp.exe" -NoNewWindow -PassThru | Out-Null
 
           # Wait for application to be ready (max 30 seconds)
@@ -210,7 +212,7 @@ jobs:
             $attempt++
             Start-Sleep -Seconds 1
             try {
-              $response = Invoke-WebRequest -Uri "https://localhost:5001/health" -SkipCertificateCheck -TimeoutSec 2 -ErrorAction SilentlyContinue
+              $response = Invoke-WebRequest -Uri "http://localhost:5000/health" -TimeoutSec 2 -ErrorAction SilentlyContinue
               if ($response.StatusCode -eq 200) {
                 $ready = $true
                 Write-Host "Application is ready after $attempt seconds"
@@ -230,7 +232,7 @@ jobs:
         env:
           CI: "true"
           SKIP_AUTH_TESTS: "true"
-          API_BASE_URL: "https://localhost:5001"
+          API_BASE_URL: "http://localhost:5000"
         run: |
           $config = New-PesterConfiguration
           $config.Run.Path = './tests/Scripts'
