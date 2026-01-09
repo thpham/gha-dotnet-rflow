@@ -204,39 +204,6 @@ jobs:
           Install-Module -Name Pester -MinimumVersion 5.0 -Force -SkipPublisherCheck
           Import-Module Pester
 
-      - name: Start Application
-        shell: pwsh
-        run: |
-          # Start the application in background using plain HTTP for CI simplicity
-          # Avoids certificate trust issues and HTTPS redirect complications
-          $env:ASPNETCORE_URLS = "http://localhost:5000"
-          $env:ASPNETCORE_ENVIRONMENT = "CI"
-          Start-Process -FilePath "./publish/MyApp.exe" -NoNewWindow -PassThru | Out-Null
-
-          # Wait for application to be ready (max 30 seconds)
-          $maxAttempts = 30
-          $attempt = 0
-          $ready = $false
-
-          while (-not $ready -and $attempt -lt $maxAttempts) {
-            $attempt++
-            Start-Sleep -Seconds 1
-            try {
-              $response = Invoke-WebRequest -Uri "http://localhost:5000/health" -TimeoutSec 2 -ErrorAction SilentlyContinue
-              if ($response.StatusCode -eq 200) {
-                $ready = $true
-                Write-Host "Application is ready after $attempt seconds"
-              }
-            }
-            catch {
-              Write-Host "Waiting for application... attempt $attempt/$maxAttempts"
-            }
-          }
-
-          if (-not $ready) {
-            throw "Application failed to start within $maxAttempts seconds"
-          }
-
       - name: Run Pester Integration Tests
         shell: pwsh
         env:
@@ -244,25 +211,62 @@ jobs:
           SKIP_AUTH_TESTS: "true"
           API_BASE_URL: "http://localhost:5000"
         run: |
-          $config = New-PesterConfiguration
-          $config.Run.Path = './tests/Scripts'
-          $config.Run.Exit = $true
-          # Only exclude WindowsAuth tests (require domain environment)
-          $config.Filter.ExcludeTag = @('WindowsAuth')
-          $config.TestResult.Enabled = $true
-          $config.TestResult.OutputPath = './TestResults/pester-results.xml'
-          $config.TestResult.OutputFormat = 'NUnitXml'
-          $config.Output.Verbosity = 'Detailed'
+          # Start the application in background using plain HTTP for CI simplicity
+          # Avoids certificate trust issues and HTTPS redirect complications
+          # NOTE: App must be started in same shell session to avoid process lifecycle issues
+          # across GitHub Actions steps (child processes may be killed when step ends)
+          $env:ASPNETCORE_URLS = "http://localhost:5000"
+          $env:ASPNETCORE_ENVIRONMENT = "CI"
+          $appProcess = Start-Process -FilePath "./publish/MyApp.exe" -NoNewWindow -PassThru
 
-          Invoke-Pester -Configuration $config
+          $testExitCode = 1
+          try {
+            # Wait for application to be ready (max 30 seconds)
+            $maxAttempts = 30
+            $ready = $false
 
-      - name: Stop Application
-        if: always()
-        shell: pwsh
-        run: |
-          # Stop the application gracefully
-          Get-Process -Name "MyApp" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-          Write-Host "Application stopped"
+            for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-WebRequest -Uri "http://localhost:5000/health" -TimeoutSec 2 -ErrorAction SilentlyContinue
+                if ($response.StatusCode -eq 200) {
+                  $ready = $true
+                  Write-Host "Application is ready after $attempt seconds"
+                  break
+                }
+              }
+              catch {
+                Write-Host "Waiting for application... attempt $attempt/$maxAttempts"
+              }
+            }
+
+            if (-not $ready) {
+              throw "Application failed to start within $maxAttempts seconds"
+            }
+
+            # Run Pester tests
+            $config = New-PesterConfiguration
+            $config.Run.Path = './tests/Scripts'
+            $config.Run.Exit = $false  # Handle exit ourselves to ensure cleanup
+            # Only exclude WindowsAuth tests (require domain environment)
+            $config.Filter.ExcludeTag = @('WindowsAuth')
+            $config.TestResult.Enabled = $true
+            $config.TestResult.OutputPath = './TestResults/pester-results.xml'
+            $config.TestResult.OutputFormat = 'NUnitXml'
+            $config.Output.Verbosity = 'Detailed'
+
+            $result = Invoke-Pester -Configuration $config
+            $testExitCode = if ($result.FailedCount -gt 0) { 1 } else { 0 }
+          }
+          finally {
+            # Stop the application gracefully
+            if ($appProcess -and -not $appProcess.HasExited) {
+              $appProcess | Stop-Process -Force -ErrorAction SilentlyContinue
+              Write-Host "Application stopped"
+            }
+          }
+
+          exit $testExitCode
 
       - name: Upload Pester Results
         # v4
