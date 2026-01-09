@@ -89,6 +89,9 @@ jobs:
             --collect:"XPlat Code Coverage" `
             --results-directory ./TestResults
 
+      - name: Publish Application
+        run: dotnet publish src/MyApp/MyApp.csproj -c ${{ env.BUILD_CONFIGURATION }} --no-build -o ./publish
+
       - name: Upload Test Results
         # v4
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
@@ -97,6 +100,14 @@ jobs:
           name: test-results
           path: ./TestResults
           retention-days: 7
+
+      - name: Upload Published Application
+        # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: published-app
+          path: ./publish
+          retention-days: 1
 
       # - name: Upload Coverage to Codecov
       #   # v5 - Disabled by default. To enable:
@@ -178,15 +189,14 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
         with:
           persist-credentials: false
+          sparse-checkout: tests/Scripts
 
-      - name: Setup .NET
-        # v5
-        uses: actions/setup-dotnet@2016bd2012dba4e32de620c46fe006a3ac9f0602
+      - name: Download Published Application
+        # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Build Application
-        run: dotnet publish src/MyApp/MyApp.csproj -c Release -o ./publish
+          name: published-app
+          path: ./publish
 
       - name: Install Pester
         shell: pwsh
